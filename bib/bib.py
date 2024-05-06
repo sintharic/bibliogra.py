@@ -2,7 +2,7 @@
 infile = "/Users/christian/OneDrive/PhD/Publications/Confinement effect/confinement.bib"
 outfile = "/Users/christian/OneDrive/PhD/Publications/Confinement effect/confinement_clean.bib"
 
-ECLUDE_PROPS = ["abstract", "mendeley-groups", "file", "url", "keywords", "month"]
+ECLUDE_PROPS = ["abstract", "mendeley-groups", "keywords", "month"]
 JOUR_IN_KEY = True
 RENEW_KEY = True
 MARTIN_FORMAT = True
@@ -337,11 +337,13 @@ class BibRef():
 
     # then all other properties
     for key in self.properties.keys():
-      if key not in ["author","title","year","doi"]+ECLUDE_PROPS:
+      if key not in ["author","title","year","file","doi"]+ECLUDE_PROPS:
         string += "  " + key.ljust(9) + " = {"
         string += check_brackets(self.properties[key]) + "},\n"
 
-    # doi comes last
+    # file and doi come last
+    if "file" in self.properties.keys():
+      string += "  file      = {" + check_brackets(self.properties["file"]) + "},\n"
     if "doi" in self.properties.keys():
       string += "  doi       = {" + check_brackets(self.properties["doi"]) + "},\n"
     
@@ -445,24 +447,28 @@ def read_bib_file(filename):
 
 
 
-reflist = read_bib_file(infile)
+def main():
+  reflist = read_bib_file(infile)
 
-# sort references alphabetically
-refkeys = [ref.citekey for ref in reflist]
-idcs = argsort(refkeys)
-sortedreflist = []
-for iref in idcs:
-  sortedreflist.append(reflist[iref])
-# check for identical keys
-duplicates = 0
-for idx in range(1,len(sortedreflist)):
-  if sortedreflist[idx].citekey == sortedreflist[idx-1-duplicates].citekey:
-    #print(sortedreflist[idx].citekey)#DEBUG
-    duplicates += 1
-    sortedreflist[idx].citekey = sortedreflist[idx].citekey + chr(ord("a")+duplicates-1)
-  else:
-    duplicates = 0
+  # sort references alphabetically
+  refkeys = [ref.citekey for ref in reflist]
+  idcs = argsort(refkeys)
+  sortedreflist = []
+  for iref in idcs:
+    sortedreflist.append(reflist[iref])
+  # check for identical keys
+  duplicates = 0
+  for idx in range(1,len(sortedreflist)):
+    if sortedreflist[idx].citekey == sortedreflist[idx-1-duplicates].citekey:
+      #print(sortedreflist[idx].citekey)#DEBUG
+      duplicates += 1
+      sortedreflist[idx].citekey = sortedreflist[idx].citekey + chr(ord("a")+duplicates-1)
+    else:
+      duplicates = 0
 
-with open(outfile,"w") as output:
-  for ref in sortedreflist:
-    output.write(ref.bibtex())
+  with open(outfile,"w") as output:
+    for ref in sortedreflist:
+      output.write(ref.bibtex())
+
+if __name__ == '__main__':
+  main()
