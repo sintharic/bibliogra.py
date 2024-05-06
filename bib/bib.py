@@ -126,8 +126,7 @@ def Jinitials(journalname):
 
 # drop leading and trailing spaces from a string
 def drop_spaces(string):
-  while string[0]=="\t": string = string[1:]
-  while string[0]==" ": string = string[1:]
+  while string[0] in (" ", "\t"): string = string[1:]
   while string[-1]==" ": string = string[:-1]
   return(string)
 

@@ -1,5 +1,5 @@
-refpath = '/Users/christian/OneDrive - INM/References'
-bibfile = refpath+'/references.bib'
+pdf_folder = '/Users/christian/OneDrive - INM/References'
+bib_file = pdf_folder+'/references.bib'
 
 mandatory = {
   'article': ['journal', 'volume', 'pages', 'year']
@@ -7,21 +7,22 @@ mandatory = {
 
 import os
 from pypdf import PdfReader
-# import bibtexparser
 from bib.tools import pdf2doi, doi2bib
 from bib.bib import BibRef
 import webbrowser
 
-pdfs = os.listdir(refpath)
-pdfs = [refpath+os.sep+pdf for pdf in pdfs if pdf[-4:]=='.pdf']
+pdfs = os.listdir(pdf_folder)
+pdfs = [pdf_folder+os.sep+pdf for pdf in pdfs if pdf[-4:]=='.pdf']
 
 unknown = []
+dois = []
 refs = []
 for pdf in pdfs:
   # print(pdf)
   
   try: 
     doi = pdf2doi(pdf)
+    dois.append(doi)
     print(doi)
   except: 
     unknown.append(pdf)
@@ -38,7 +39,7 @@ for pdf in pdfs:
     if obj.doctype in mandatory.keys():
       for prop in mandatory[obj.doctype]:
         if prop not in obj.properties.keys():
-          ans = input(f'field \'{prop}\' missing. Do you want to specify it manually? (y/n) ')
+          ans = input(f'{obj.citekey}: field \'{prop}\' missing. Do you want to specify it manually? (y/n) ')
           if ans == 'y':
             webbrowser.open(obj.properties['url'])
             ans = input(f'enter value for \'{prop}\': ')
@@ -49,10 +50,11 @@ for pdf in pdfs:
     print(f'{type(e)}: {e}')
   print()
 
-print(f'\ncould not extract doi from {len(unknown)} file(s):')
-for pdf in unknown:
-  print(pdf)
+if len(unknown)>0:
+  print(f'\ncould not extract doi from {len(unknown)}/{len(pdfs)} file(s):')
+  for pdf in unknown:
+    print(pdf)
 
-with open(bibfile, 'w') as output:
+with open(bib_file, 'w') as output:
   for ref in refs:
     output.write(ref.bibtex())
