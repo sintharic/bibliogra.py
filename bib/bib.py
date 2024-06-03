@@ -2,10 +2,10 @@
 infile = "/Users/christian/OneDrive/PhD/Publications/Confinement effect/confinement.bib"
 outfile = "/Users/christian/OneDrive/PhD/Publications/Confinement effect/confinement_clean.bib"
 
-ECLUDE_PROPS = ["abstract", "mendeley-groups", "keywords", "month"]
+EXCLUDE_PROPS = ["abstract", "mendeley-groups", "month"]#, "keywords"]
 JOUR_IN_KEY = True
 RENEW_KEY = True
-MARTIN_FORMAT = True
+ABBREV_JOUR = True
 
 # update Journal abbreviations if necessary
 JAbbrev = {
@@ -34,26 +34,23 @@ JAbbrev = {
 
 
 import sys
-if len(sys.argv) > 1:
-  infile = sys.argv[1]
-if len(sys.argv) > 2:
-  outfile = sys.argv[2]
-elif len(sys.argv) > 1:
-  outfile = infile[:-4] + "_clean.bib"
-
 from datetime import datetime
 DATE = datetime.now().strftime("%Y-%m-%d")
-#DEBUG
-#print(sys.argv)
-#print(infile)
-#print(outfile)
-#sys.exit("DEBUG MODE")
+from .logger import logger
 
 
 
 def argsort(seq):
   # http://stackoverflow.com/questions/3071415/efficient-method-to-calculate-the-rank-vector-of-a-list-in-python
   return sorted(range(len(seq)), key=seq.__getitem__)
+
+def split(s: str, separators):
+  if isinstance(separators, str): return s.split(separators)
+  
+  result = s.split(separators[0])
+  for separator in separators[1:]:
+    result = [substr.split(separator) for substr in result]
+  return result
 
 
 
@@ -171,7 +168,8 @@ class BibRef():
     # doctype and citation key from first line
     idx = bibstring.find("\n")
     line0 = bibstring[0:idx].split("{")
-    if len(line0) != 2: print("WARNING: ambiguous document type or citation key: %s!"%str(line0))
+    if len(line0) != 2: 
+      logger.warn("ambiguous document type or citation key: %s!"%str(line0))
     self.doctype = line0[0][1:].lower()
     self.citekey = line0[1].split(",")[0]
     bibstring = bibstring[idx+1:]
@@ -273,38 +271,9 @@ class BibRef():
         last = names[-1]
         first = initials(names[:-1])
 
-      # properly escape Umlauts: should be unnecessary with utf8 encoding
-#      last = last.replace('ä','{\\"a}')
-#      last = last.replace('ö','{\\"o}')
-#      last = last.replace('ü','{\\"u}')
-#      last = last.replace('Ä','{\\"A}')
-#      last = last.replace('Ö','{\\"O}')
-#      last = last.replace('Ü','{\\"U}')
-#      first = first.replace('ä','{\\"a}')
-#      first = first.replace('ö','{\\"o}')
-#      first = first.replace('ü','{\\"u}')
-#      first = first.replace('Ä','{\\"A}')
-#      first = first.replace('Ö','{\\"O}')
-#      first = first.replace('Ü','{\\"U}')
-#      pos = last.find("¨")
-#      if pos >= 0: print("PROBLEM:", last)
-
       # potentially fix Umlauts in last name
       if last=="Mueser": last = 'M{\\"{u}}ser'
       if last=="Mueller": last = 'M{\\"{u}}ller'
-#      if "ae" in last:
-#        print(last)
-#        ans = input("Does this contain a misinterpreted Umlaut? (y/n) ")
-#        if ans=="y": last.replace("ae",'{\\"{a}}')
-#      if "oe" in last:
-#        print(last)
-#        ans = input("Does this contain a misinterpreted Umlaut? (y/n) ")
-#        if ans=="y": last.replace("oe",'{\\"{o}}')
-#      if "ue" in last:
-#        print(last)
-#        ans = input("Does this contain a misinterpreted Umlaut? (y/n) ")
-#        if ans=="y": last.replace("ue",'{\\"{u}}')
-        
 
       # assemble last name and first names
       newauthors += check_brackets(last) + ", " + check_brackets(first) + " and "
@@ -336,7 +305,7 @@ class BibRef():
 
     # then all other properties
     for key in self.properties.keys():
-      if key not in ["author","title","year","file","doi"]+ECLUDE_PROPS:
+      if key not in ["author","title","year","file","doi"]:
         string += "  " + key.ljust(9) + " = {"
         string += check_brackets(self.properties[key]) + "},\n"
 
@@ -349,6 +318,11 @@ class BibRef():
     string = string[:-2] + "\n}\n\n" # drop comma after final property
 
     return(string)
+
+  def exclude_props(self, exclude):
+    # then all other properties
+    for key in self.properties.keys():
+      if key in exclude: self.properties.pop(key)
 
 
   def renew_citekey(self):
@@ -388,7 +362,7 @@ class BibRef():
       print_error(e, "renew_citekey()", self)
 
 
-  def update_citekey(self):
+  def add_jour_to_key(self):
     if not self.citekey: 
       print("---", self.properties["author"], ":", self.properties["title"])
       self.renew_citekey()
@@ -399,16 +373,59 @@ class BibRef():
 
 
 
+class Library:
+  _list = []
+
+  def __init__(self, entries=None):
+    if entries is None: return
+    self._list = entries
+
+  def __getitem__(self, key):
+    return self._list[key]
+
+  def __len__(self):
+    return len(self._list)
+
+  def add(self, ref):
+    self._list.append(ref)
+
+  def clean(self, renew_key=RENEW_KEY, jour_in_key=JOUR_IN_KEY, abbrev_jour=ABBREV_JOUR, exclude_props=EXCLUDE_PROPS):
+    for ref in self._list:
+      ref.clean_authors()
+      if abbrev_jour: ref.clean_journal()
+      if renew_key: ref.renew_citekey()
+      if jour_in_key: ref.add_jour_to_key()
+      if exclude_props: ref.exclude_props(exclude_props)
+
+    # sort references alphabetically
+    refkeys = [ref.citekey for ref in self._list]
+    self._list = [self._list[idx] for idx in argsort(refkeys)]
+
+    # check for identical keys
+    duplicates = 0
+    for idx in range(1,len(self._list)):
+      if self._list[idx].citekey == self._list[idx-1-duplicates].citekey:
+        #print(self._list[idx].citekey)#DEBUG
+        duplicates += 1
+        self._list[idx].citekey = self._list[idx].citekey + chr(ord("a")+duplicates-1)
+      else:
+        duplicates = 0
+
+  def write(self, filename, mode="w"):
+    with open(filename, mode) as output:
+      for ref in self._list:
+        output.write(ref.bibtex())
 
 
-def read_bib_file(filename):
+
+
+def read_bib(filename):
 
   bibstrings = []
   opened = 0; closed = 0 # count open/closed curly brackets
   isentry = False
 
   with open(filename,"r") as file:
-    
     for line in file.readlines():
 
       # entry starts
@@ -430,44 +447,23 @@ def read_bib_file(filename):
   # convert strings to BibRef objects
   entries = []
   for entry in bibstrings:
-    ref = BibRef(entry)
-#    print(ref.citekey)#DEBUG
-    #print(ref.citekey, ref.properties.keys())#DEBUG
-    ref.clean_authors()
-    ref.clean_journal()
-    #if ref.doctype=="article": print(ref.properties["journal"])#DEBUG
-    if RENEW_KEY: ref.renew_citekey()
-    if JOUR_IN_KEY: ref.update_citekey()
-    entries.append(ref)
-    #text = ref.bibtex()#DEBUG
-    #print(text)#DEBUG
+    entries.append(BibRef(entry))
   
-  return(entries)
+  return(Library(entries))
 
 
 
 def main():
-  reflist = read_bib_file(infile)
+  if len(sys.argv) > 1:
+    infile = sys.argv[1]
+  if len(sys.argv) > 2:
+    outfile = sys.argv[2]
+  elif len(sys.argv) > 1:
+    outfile = infile[:-4] + "_clean.bib"
 
-  # sort references alphabetically
-  refkeys = [ref.citekey for ref in reflist]
-  idcs = argsort(refkeys)
-  sortedreflist = []
-  for iref in idcs:
-    sortedreflist.append(reflist[iref])
-  # check for identical keys
-  duplicates = 0
-  for idx in range(1,len(sortedreflist)):
-    if sortedreflist[idx].citekey == sortedreflist[idx-1-duplicates].citekey:
-      #print(sortedreflist[idx].citekey)#DEBUG
-      duplicates += 1
-      sortedreflist[idx].citekey = sortedreflist[idx].citekey + chr(ord("a")+duplicates-1)
-    else:
-      duplicates = 0
-
-  with open(outfile,"w") as output:
-    for ref in sortedreflist:
-      output.write(ref.bibtex())
+  lib = read_bib(infile)
+  lib.clean()
+  lib.write(outfile)
 
 if __name__ == '__main__':
   main()
