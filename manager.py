@@ -26,17 +26,20 @@ def pdfs2dois(pdf_list):
   doi_list = []
   unknown = []
   for pdf in pdf_list:
-    # print('pdf:', pdf)
+    print()
+    print('-'*60)
+    print(pdf)
+    print('-'*60)
     try: 
       doi = pdf2doi(pdf)
       doi_list.append(doi)
       # print('doi:', doi)
     except: 
       doi = ''
-      ans = input(f'{pdf}: Could not extract DOI. Do you want to specify it manually? (y/n) ')
+      ans = input(f'Could not extract DOI. Open PDF to find it manually? (y/n) ')
       if ans == 'y':
         open_file(pdf)
-        doi = input(f'enter DOI: ')
+        doi = input(f'Enter DOI: ')
       if doi:
         doi_list.append(doi)
       else:
@@ -59,15 +62,15 @@ def generate_lib(pdf_list, doi_list):
       if obj.doctype in mandatory.keys():
         for prop in mandatory[obj.doctype]:
           if prop not in obj.properties.keys():
-            ans = input(f'{obj.citekey}: field \'{prop}\' missing. Do you want to specify it manually? (y/n) ')
+            ans = input(f'{obj.citekey}: field \'{prop}\' missing. Open website to find it manually? (y/n) ')
             if ans == 'y':
               webbrowser.open(obj.properties['url'])
-              ans = input(f'enter value for \'{prop}\': ')
+              ans = input(f'Enter value for \'{prop}\': ')
               if ans: obj.properties[prop] = ans
       ref_list.append(obj)
 
     except Exception as e:
-      print(f'{e.__class__}: {e}')
+      print(f'{e.__class__.__name__}: {e}')
     print()
 
   return Library(ref_list)
@@ -82,13 +85,13 @@ unsynced_bibs = [ref for ref in lib if ('file' not in ref.properties.keys()) or 
 
 print(f'found {len(unsynced_bibs)} bibrefs without corresponding pdf.')
 print(f'found {len(unsynced_pdfs)} pdfs without corresponding bib entry.')
-print(unsynced_pdfs)
+# print(unsynced_pdfs)
 
 new_dois, unknown = pdfs2dois(unsynced_pdfs)
 if len(unknown)>0:
   print(f'\ncould not extract doi from {len(unknown)}/{len(unsynced_pdfs)} file(s):')
   for pdf in unknown:
-    print(pdf)
+    print('-', pdf)
 
 
 new_refs = generate_lib(unsynced_pdfs, new_dois)
